@@ -1,1 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HONA — Owner Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<style>
+  :root {
+    --red:#ff2d2d; --bg:#080808; --surface:#111; --surface2:#181818;
+    --border:rgba(255,255,255,.06); --text:#f0f0f0; --text-dim:#555;
+    --text-mid:#888; --green:#00ff88; --yellow:#ffd700;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;overflow-x:hidden}
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 32px;border-bottom:1px solid var(--border);background:rgba(8,8,8,.97);position:sticky;top:0;z-index:100}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;letter-spacing:6px;display:flex;align-items:center;gap:10px}
+  .logo-dot{width:8px;height:8px;background:var(--red);border-radius:50%;box-shadow:0 0 12px var(--red);animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 12px var(--red)}50%{opacity:.5;box-shadow:0 0 4px var(--red)}}
+  .live{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:2px;color:var(--green)}
+  .live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pg 1.5s ease-in-out infinite}
+  @keyframes pg{0%,100%{opacity:1}50%{opacity:.3}}
+  .main{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 61px)}
+  .sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+  .stat{padding:14px 8px;text-align:center;border-right:1px solid var(--border)}
+  .stat:last-child{border-right:none}
+  .stat-num{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+  .stat-label{font-size:8px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-top:3px}
+  .filters{display:flex;border-bottom:1px solid var(--border)}
+  .filter-btn{flex:1;padding:10px 4px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:none;border-right:1px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .2s}
+  .filter-btn:last-child{border-right:none}
+  .filter-btn.active{color:var(--text);background:var(--surface)}
+  .filter-btn.active.flost{color:var(--red)}
+  .filter-btn.active.fsafe{color:var(--green)}
+  .device-list{flex:1;overflow-y:auto}
+  .device-list::-webkit-scrollbar{width:2px}
+  .device-list::-webkit-scrollbar-thumb{background:var(--border)}
+  .device-card{padding:16px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;position:relative}
+  .device-card:hover,.device-card.active{background:var(--surface)}
+  .device-card.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--red);box-shadow:0 0 8px var(--red)}
+  .device-card.slost{border-left:2px solid var(--red)}
+  .device-card.ssafe{border-left:2px solid var(--green)}
+  .device-card.swarning{border-left:2px solid var(--yellow)}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
+  .device-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:600}
+  .owner-name{font-size:10px;color:var(--text-mid);margin-bottom:4px}
+  .status-badge{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;padding:3px 7px;border-radius:2px}
+  .bsafe{color:var(--green);background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2)}
+  .blost{color:var(--red);background:rgba(255,45,45,.08);border:1px solid rgba(255,45,45,.3);animation:blink .8s ease-in-out infinite}
+  .bwarning{color:var(--yellow);background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+  .card-loc{font-size:10px;color:var(--text-mid);margin-bottom:8px}
+  .card-meta{display:flex;align-items:center;gap:12px}
+  .batt-wrap{display:flex;align-items:center;gap:5px;font-size:10px}
+  .batt-bar{width:28px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+  .batt-fill{height:100%;border-radius:2px}
+  .batt-life{font-size:9px;color:var(--text-dim)}
+  .updated{font-size:9px;color:var(--text-dim);margin-left:auto}
 
+  /* MAP */
+  .map-area{position:relative;overflow:hidden}
+  #map{width:100%;height:100%}
+
+  /* THEME SWITCHER */
+  .theme-bar{
+    position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;z-index:20;
+    background:rgba(8,8,8,.92);border:1px solid var(--border);
+    padding:8px 12px;backdrop-filter:blur(20px);
+  }
+  .theme-label{font-size:9px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;display:flex;align-items:center;padding-right:8px;border-right:1px solid var(--border);margin-right:2px}
+  .theme-btn{
+    width:28px;height:28px;border-radius:50%;border:2px solid transparent;
+    cursor:pointer;transition:all .2s;position:relative;
+  }
+  .theme-btn:hover{transform:scale(1.15)}
+  .theme-btn.active{border-color:var(--red);box-shadow:0 0 8px var(--red)}
+  .theme-btn[data-theme="dark"]{background:#0a0a0a;border-color:#333}
+  .theme-btn[data-theme="satellite"]{background:linear-gradient(135deg,#1a3a1a,#2d5a2d)}
+  .theme-btn[data-theme="streets"]{background:linear-gradient(135deg,#e8e0d5,#c9b99a)}
+  .theme-btn[data-theme="light"]{background:#f0ede8;border-color:#ccc}
+  .theme-btn[data-theme="outdoors"]{background:linear-gradient(135deg,#a8d5a2,#7fb069)}
+  .theme-btn[data-theme="navy"]{background:linear-gradient(135deg,#0a1628,#1a3a6b)}
+  .theme-tooltip{
+    position:absolute;bottom:36px;left:50%;transform:translateX(-50%);
+    background:rgba(8,8,8,.95);border:1px solid var(--border);
+    padding:3px 8px;font-size:9px;letter-spacing:1px;white-space:nowrap;
+    color:var(--text);pointer-events:none;opacity:0;transition:opacity .2s;
+  }
+  .theme-btn:hover .theme-tooltip{opacity:1}
+
+  /* MAP PANELS */
+  .map-top-right{position:absolute;top:20px;right:20px;background:rgba(8,8,8,.92);border:1px solid var(--border);padding:14px 18px;backdrop-filter:blur(20px);min-width:180px;z-index:10}
+  .panel-title{font-size:8px;letter-spacing:2.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:10px}
+  .panel-row{display:flex;justify-content:space-between;gap:16px;margin-bottom:6px;font-size:10px}
+  .panel-row:last-child{margin-bottom:0}
+  .pr-label{color:var(--text-dim)}
+
+  /* DEVICE DETAIL */
+  .device-detail{position:absolute;bottom:80px;right:20px;background:rgba(8,8,8,.96);border:1px solid var(--border);padding:20px;min-width:280px;backdrop-filter:blur(20px);display:none;z-index:20}
+  .device-detail.show{display:block;animation:su .25s ease}
+  @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .dd-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+  .dd-close{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1}
+  .dd-close:hover{color:var(--text)}
+  .dd-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:2px}
+  .dd-owner-box{background:var(--surface2);padding:12px 14px;margin-bottom:12px;border-left:2px solid var(--red)}
+  .dd-owner-label{font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-bottom:6px}
+  .dd-owner-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:3px}
+  .dd-owner-phone{font-size:11px;color:var(--text-mid)}
+  .dd-owner-email{font-size:10px;color:var(--text-dim);margin-top:2px}
+  .dd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .dd-item{background:var(--surface2);padding:9px 11px}
+  .dd-item-label{font-size:8px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:3px}
+  .dd-item-val{font-size:12px}
+  .g{color:var(--green)}.y{color:var(--yellow)}.r{color:var(--red)}
+  .alert-btn{width:100%;background:rgba(255,45,45,.1);border:1px solid rgba(255,45,45,.3);color:var(--red);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:9px;cursor:pointer;transition:all .2s}
+  .alert-btn:hover{background:rgba(255,45,45,.2)}
+  .alert-btn:disabled{opacity:.5;cursor:default}
+
+  /* Mapbox popup custom */
+  .mapboxgl-popup-content{background:rgba(8,8,8,.95)!important;border:1px solid rgba(255,255,255,.08)!important;color:#f0f0f0!important;font-family:'DM Mono',monospace!important;font-size:11px!important;padding:10px 14px!important;border-radius:0!important}
+  .mapboxgl-popup-tip{border-top-color:rgba(8,8,8,.95)!important}
+  .mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>HONA</div>
+  <div style="display:flex;align-items:center;gap:20px">
+    <span style="font-size:10px;letter-spacing:2px;color:var(--text-dim)">OWNER PANEL</span>
+    <div class="live"><div class="live-dot"></div>LIVE</div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="stats">
+      <div class="stat"><div class="stat-num" style="color:var(--green)">5</div><div class="stat-label">Total</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--green)">3</div><div class="stat-label">Safe</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--red)">1</div><div class="stat-label">Lost</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--yellow)">1</div><div class="stat-label">Warning</div></div>
+    </div>
+    <div class="filters">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn fsafe" onclick="setFilter('safe',this)">✓ Safe</button>
+      <button class="filter-btn flost" onclick="setFilter('lost',this)">⚠ Lost</button>
+      <button class="filter-btn" onclick="setFilter('warning',this)">⚡ Low</button>
+    </div>
+    <div class="device-list" id="device-list"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-area">
+    <div id="map"></div>
+
+    <!-- Theme switcher -->
+    <div class="theme-bar">
+      <div class="theme-label">THEME</div>
+      <div class="theme-btn active" data-theme="dark" data-style="mapbox://styles/mapbox/dark-v11" onclick="setTheme(this)">
+        <div class="theme-tooltip">Dark</div>
+      </div>
+      <div class="theme-btn" data-theme="navy" data-style="mapbox://styles/mapbox/navigation-night-v1" onclick="setTheme(this)">
+        <div class="theme-tooltip">Night</div>
+      </div>
+      <div class="theme-btn" data-theme="satellite" data-style="mapbox://styles/mapbox/satellite-streets-v12" onclick="setTheme(this)">
+        <div class="theme-tooltip">Satellite</div>
+      </div>
+      <div class="theme-btn" data-theme="streets" data-style="mapbox://styles/mapbox/streets-v12" onclick="setTheme(this)">
+        <div class="theme-tooltip">Streets</div>
+      </div>
+      <div class="theme-btn" data-theme="light" data-style="mapbox://styles/mapbox/light-v11" onclick="setTheme(this)">
+        <div class="theme-tooltip">Light</div>
+      </div>
+      <div class="theme-btn" data-theme="outdoors" data-style="mapbox://styles/mapbox/outdoors-v12" onclick="setTheme(this)">
+        <div class="theme-tooltip">Outdoors</div>
+      </div>
+    </div>
+
+    <!-- Top right panel -->
+    <div class="map-top-right">
+      <div class="panel-title">Network</div>
+      <div class="panel-row"><span class="pr-label">Online</span><span style="color:var(--green)">5 / 5</span></div>
+      <div class="panel-row"><span class="pr-label">Coverage</span><span>Global NB-IoT</span></div>
+      <div class="panel-row"><span class="pr-label">Lost</span><span style="color:var(--red)">1 Device</span></div>
+      <div class="panel-row"><span class="pr-label">Sync</span><span>Just now</span></div>
+    </div>
+
+    <!-- Device detail -->
+    <div class="device-detail" id="device-detail">
+      <div class="dd-header">
+        <div>
+          <div class="dd-name" id="dd-name"></div>
+          <div id="dd-loc" style="font-size:10px;color:var(--text-mid);margin-top:2px"></div>
+        </div>
+        <button class="dd-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="dd-owner-box">
+        <div class="dd-owner-label">Device Owner</div>
+        <div class="dd-owner-name" id="dd-owner-name"></div>
+        <div class="dd-owner-phone" id="dd-owner-phone"></div>
+        <div class="dd-owner-email" id="dd-owner-email"></div>
+      </div>
+      <div class="dd-grid">
+        <div class="dd-item"><div class="dd-item-label">Status</div><div class="dd-item-val" id="dd-status"></div></div>
+        <div class="dd-item"><div class="dd-item-label">Battery</div><div class="dd-item-val" id="dd-batt"></div></div>
+        <div class="dd-item"><div class="dd-item-label">Battery Life</div><div class="dd-item-val" id="dd-battlife"></div></div>
+        <div class="dd-item"><div class="dd-item-label">Last Update</div><div class="dd-item-val" id="dd-time"></div></div>
+        <div class="dd-item"><div class="dd-item-label">Network</div><div class="dd-item-val">NB-IoT 4G</div></div>
+        <div class="dd-item"><div class="dd-item-label">QR Scans</div><div class="dd-item-val" id="dd-scans"></div></div>
+      </div>
+      <button class="alert-btn" id="alert-btn" onclick="triggerAlert()">⚡ ACTIVATE LED ALERT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoid2FsZWVkMTYiLCJhIjoiY21tYTBzdnM2MDdzaTJxczV6cWJpamRuMiJ9.EgeeQEx3-eIFskILEQNl8w';
+
+const devices = [
+  { id:0, name:'MacBook Pro 14"', flag:'🇫🇷', loc:'Paris, France', coords:'48.8566° N, 2.3522° E', lngLat:[2.3522,48.8566], status:'safe', batt:78, battLife:'~3.2 yrs', time:'2 min ago', scans:0, owner:{name:'Ahmed Al-Rashidi', phone:'+966 50 123 4567', email:'ahmed@gmail.com'} },
+  { id:1, name:'iPhone 15 Pro', flag:'🇦🇪', loc:'Dubai, UAE', coords:'25.2048° N, 55.2708° E', lngLat:[55.2708,25.2048], status:'safe', batt:54, battLife:'~2.8 yrs', time:'5 min ago', scans:2, owner:{name:'Ahmed Al-Rashidi', phone:'+966 50 123 4567', email:'ahmed@gmail.com'} },
+  { id:2, name:'Sony A7 Camera', flag:'🇧🇷', loc:'São Paulo, Brazil', coords:'23.5505° S, 46.6333° W', lngLat:[-46.6333,-23.5505], status:'warning', batt:12, battLife:'~0.3 yrs', time:'1 min ago', scans:0, owner:{name:'Ahmed Al-Rashidi', phone:'+966 50 123 4567', email:'ahmed@gmail.com'} },
+  { id:3, name:'Louis Vuitton Bag', flag:'🇯🇵', loc:'Tokyo, Japan', coords:'35.6762° N, 139.6503° E', lngLat:[139.6503,35.6762], status:'lost', batt:65, battLife:'~2.5 yrs', time:'12 min ago', scans:1, owner:{name:'Ahmed Al-Rashidi', phone:'+966 50 123 4567', email:'ahmed@gmail.com'} },
+  { id:4, name:'Dell XPS Laptop', flag:'🇸🇦', loc:'Riyadh, Saudi Arabia', coords:'24.7136° N, 46.6753° E', lngLat:[46.6753,24.7136], status:'safe', batt:91, battLife:'~4.1 yrs', time:'Just now', scans:0, owner:{name:'Ahmed Al-Rashidi', phone:'+966 50 123 4567', email:'ahmed@gmail.com'} }
+];
+
+let activeFilter='all', selectedId=null, map, markers=[];
+
+function bc(b){ return b>50?'#00ff88':b>20?'#ffd700':'#ff2d2d' }
+function bclass(b){ return b>50?'g':b>20?'y':'r' }
+
+// Init map
+mapboxgl.accessToken = MAPBOX_TOKEN;
+map = new mapboxgl.Map({
+  container:'map',
+  style:'mapbox://styles/mapbox/dark-v11',
+  center:[20,20],
+  zoom:1.8,
+  projection:'globe'
+});
+
+map.on('load',()=>{
+  map.setFog({ color:'rgba(8,8,8,0)', 'high-color':'rgba(20,20,40,1)', 'horizon-blend':0.02 });
+  addMarkers();
+});
+
+function statusColor(s){ return s==='safe'?'#00ff88':s==='lost'?'#ff2d2d':'#ffd700' }
+
+function addMarkers(){
+  markers.forEach(m=>m.remove());
+  markers=[];
+  devices.forEach(d=>{
+    const el=document.createElement('div');
+    const color=statusColor(d.status);
+    el.style.cssText=`width:14px;height:14px;border-radius:50%;background:${color};box-shadow:0 0 16px ${color},0 0 32px ${color}40;cursor:pointer;border:2px solid rgba(255,255,255,.2);transition:transform .2s`;
+    if(d.status==='lost') el.style.animation='lostBlink .6s ease-in-out infinite';
+    el.onmouseenter=()=>el.style.transform='scale(1.5)';
+    el.onmouseleave=()=>el.style.transform='scale(1)';
+    el.onclick=()=>selectDevice(d.id);
+
+    const popup=new mapboxgl.Popup({offset:20,closeButton:false}).setHTML(
+      `<div style="font-family:'DM Mono',monospace">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${d.flag} ${d.name}</div>
+        <div style="color:#888;font-size:10px">${d.loc}</div>
+        <div style="margin-top:6px;font-size:10px;color:${color}">${d.status.toUpperCase()} · ${d.batt}% battery</div>
+      </div>`
+    );
+
+    const marker=new mapboxgl.Marker({element:el}).setLngLat(d.lngLat).setPopup(popup).addTo(map);
+    markers.push(marker);
+  });
+}
+
+function setTheme(btn){
+  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  map.setStyle(btn.dataset.style);
+  map.once('style.load',()=>{
+    map.setFog({ color:'rgba(8,8,8,0)', 'high-color':'rgba(20,20,40,1)', 'horizon-blend':0.02 });
+    addMarkers();
+  });
+}
+
+function renderList(){
+  const list=document.getElementById('device-list');
+  list.innerHTML='';
+  const filtered=devices.filter(d=>activeFilter==='all'||d.status===activeFilter);
+  filtered.forEach(d=>{
+    const div=document.createElement('div');
+    div.className=`device-card s${d.status}${selectedId===d.id?' active':''}`;
+    div.onclick=()=>selectDevice(d.id);
+    const badgeClass=d.status==='safe'?'bsafe':d.status==='lost'?'blost':'bwarning';
+    const badgeLabel=d.status==='safe'?'SAFE':d.status==='lost'?'LOST':'LOW BATT';
+    div.innerHTML=`
+      <div class="card-top">
+        <div><div class="device-name">${d.flag} ${d.name}</div><div class="owner-name">👤 ${d.owner.name}</div></div>
+        <div class="status-badge ${badgeClass}">${badgeLabel}</div>
+      </div>
+      <div class="card-loc">📍 ${d.loc}</div>
+      <div class="card-meta">
+        <div class="batt-wrap">
+          <div class="batt-bar"><div class="batt-fill" style="width:${d.batt}%;background:${bc(d.batt)}"></div></div>
+          <span style="color:${bc(d.batt)};font-size:10px">${d.batt}%</span>
+        </div>
+        <div class="batt-life">${d.battLife}</div>
+        <div class="updated">${d.time}</div>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function selectDevice(id){
+  selectedId=id;
+  const d=devices[id];
+  renderList();
+  map.flyTo({center:d.lngLat, zoom:10, speed:1.2});
+  markers[id].togglePopup();
+
+  document.getElementById('dd-name').textContent=d.flag+' '+d.name;
+  document.getElementById('dd-loc').textContent=d.loc+' · '+d.coords;
+  document.getElementById('dd-owner-name').textContent=d.owner.name;
+  document.getElementById('dd-owner-phone').textContent=d.owner.phone;
+  document.getElementById('dd-owner-email').textContent=d.owner.email;
+  const sc=d.status==='safe'?'g':d.status==='lost'?'r':'y';
+  const sl=d.status==='safe'?'SAFE':d.status==='lost'?'LOST':'WARNING';
+  document.getElementById('dd-status').className='dd-item-val '+sc;
+  document.getElementById('dd-status').textContent=sl;
+  document.getElementById('dd-batt').className='dd-item-val '+bclass(d.batt);
+  document.getElementById('dd-batt').textContent=d.batt+'%';
+  document.getElementById('dd-battlife').className='dd-item-val '+bclass(d.batt);
+  document.getElementById('dd-battlife').textContent=d.battLife;
+  document.getElementById('dd-time').textContent=d.time;
+  document.getElementById('dd-scans').textContent=d.scans+' times';
+  const btn=document.getElementById('alert-btn');
+  btn.disabled=false; btn.textContent='⚡ ACTIVATE LED ALERT'; btn.style.background='';
+  document.getElementById('device-detail').classList.add('show');
+}
+
+function closeDetail(){
+  selectedId=null;
+  document.getElementById('device-detail').classList.remove('show');
+  map.flyTo({center:[20,20],zoom:1.8,speed:0.8});
+  renderList();
+}
+
+function setFilter(f,btn){
+  activeFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderList();
+}
+
+function triggerAlert(){
+  const btn=document.getElementById('alert-btn');
+  btn.disabled=true; btn.textContent='🔴 ALERT SENT — LED FLASHING...'; btn.style.background='rgba(255,45,45,.25)';
+  if(selectedId!==null){
+    const el=markers[selectedId].getElement();
+    let on=true,count=0;
+    const iv=setInterval(()=>{
+      el.style.opacity=on?'1':'0.2'; on=!on; count++;
+      if(count>14){ clearInterval(iv); el.style.opacity='1'; btn.disabled=false; btn.textContent='⚡ ACTIVATE LED ALERT'; btn.style.background=''; }
+    },250);
+  }
+}
+
+// Lost blink CSS
+const style=document.createElement('style');
+style.textContent='@keyframes lostBlink{0%,100%{opacity:1}50%{opacity:.2}}';
+document.head.appendChild(style);
+
+renderList();
+</script>
+</body>
+</html>
